@@ -1,0 +1,6 @@
+{
+  "name": "PPL Fitness Tracker",
+  "description": "Application d'entraînement Push/Pull/Legs avec calcul pyramidal automatique, substitution ciblée d'exercices, timer de repos et graphiques de progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

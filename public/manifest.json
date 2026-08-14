@@ -1,0 +1,22 @@
+{
+  "name": "PPL Fitness Tracker",
+  "short_name": "PPL Fitness",
+  "description": "Application de musculation Push/Pull/Legs avec méthode pyramidale et surcharge progressive.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["fitness", "health", "sports"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
