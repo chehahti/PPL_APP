@@ -7,6 +7,7 @@ import {
   CardioSessionState 
 } from '../types/fitness';
 import { INITIAL_EXERCISES, ALL_EXERCISES_DATABASE } from '../data/defaultExercises';
+import { calculatePyramidWeights, determineNextSessionMaxWeight } from '../utils/fitnessCalculations';
 
 const STORAGE_KEYS = {
   EXERCISES: 'ppl_fitness_exercises_v1',
@@ -79,15 +80,7 @@ export class StorageService {
     exercise: ExerciseDefinition | { currentMaxWeight: number },
     rounding = 0.5
   ) {
-    const max = exercise.currentMaxWeight;
-    const roundTo = (num: number) => {
-      const inv = 1 / rounding;
-      return Math.round(num * inv) / inv;
-    };
-
-    const set1Weight = roundTo(max * 0.60); // 60%
-    const set2Weight = roundTo(max * 0.80); // 80%
-    const set3Weight = roundTo(max * 1.00); // 100%
+    const { set1Weight, set2Weight, set3Weight } = calculatePyramidWeights(exercise.currentMaxWeight, rounding);
 
     return [
       {
@@ -234,18 +227,19 @@ export class StorageService {
     workout.exercises.forEach(sessionExo => {
       const set3 = sessionExo.sets[2];
       if (set3 && set3.completed) {
-        let newMax = set3.actualWeight;
-
-        // If the user succeeded with >= 10 reps on the 100% set and autoIncrement is on, slightly boost reference
-        if (settings.autoIncrementWeightOnSuccess && set3.actualReps >= 10) {
-          newMax += settings.autoIncrementStepKg || 1.0;
-        }
-
         const idx = updatedExercises.findIndex(e => e.id === sessionExo.exerciseId);
         if (idx !== -1) {
+          const newMax = determineNextSessionMaxWeight(
+            set3,
+            updatedExercises[idx].currentMaxWeight,
+            {
+              autoIncrementWeightOnSuccess: settings.autoIncrementWeightOnSuccess,
+              autoIncrementStepKg: settings.autoIncrementStepKg
+            }
+          );
           updatedExercises[idx] = {
             ...updatedExercises[idx],
-            currentMaxWeight: Math.round(newMax * 2) / 2
+            currentMaxWeight: newMax
           };
         }
       }

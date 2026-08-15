@@ -746,6 +746,50 @@ export const EXERCISE_VARIANTS_POOL: ExerciseDefinition[] = [
     unit: 'kg',
     equipment: 'Banc et barre olympique avec mousse',
     instructionFr: 'Haut du dos sur le banc, monter le bassin jusqu\'à l\'alignement genoux-hanches-épaules.'
+  },
+
+  // LEGS_CALVES (Mollets)
+  {
+    id: 'var_extensions_mollets_debout',
+    name: 'Extensions mollets debout',
+    category: 'LEGS',
+    subGroup: 'LEGS_CALVES',
+    subGroupNameFr: 'Mollets (Gastrocnémiens)',
+    targetMuscleFr: 'Mollets (gastrocnémien médial et latéral)',
+    defaultMinWeight: 30,
+    defaultMaxWeight: 80,
+    currentMaxWeight: 50,
+    unit: 'kg',
+    equipment: 'Machine mollets debout ou step avec haltères',
+    instructionFr: 'Monter le plus haut possible sur la pointe des pieds, marquer 1 seconde d\'arrêt en haut et étirer lentement en bas.'
+  },
+  {
+    id: 'var_extensions_mollets_presse',
+    name: 'Mollets à la presse à cuisses',
+    category: 'LEGS',
+    subGroup: 'LEGS_CALVES',
+    subGroupNameFr: 'Mollets (Presse)',
+    targetMuscleFr: 'Mollets et soléaires',
+    defaultMinWeight: 60,
+    defaultMaxWeight: 120,
+    currentMaxWeight: 80,
+    unit: 'kg',
+    equipment: 'Presse à cuisses 45°',
+    instructionFr: 'Pointes de pieds sur le bas du plateau, pousser avec les orteils en gardant les genoux semi-déverrouillés.'
+  },
+  {
+    id: 'var_mollets_assis_machine',
+    name: 'Mollets assis à la machine',
+    category: 'LEGS',
+    subGroup: 'LEGS_CALVES',
+    subGroupNameFr: 'Mollets & Soléaires',
+    targetMuscleFr: 'Soléaires',
+    defaultMinWeight: 20,
+    defaultMaxWeight: 50,
+    currentMaxWeight: 35,
+    unit: 'kg',
+    equipment: 'Machine mollets assis',
+    instructionFr: 'Coussin sur les cuisses, fléchir les chevilles vers le bas puis monter au maximum.'
   }
 ];
 

@@ -20,7 +20,9 @@ export type MuscleSubGroup =
   | 'LEGS_POSTERIOR_CHAIN' // Chaîne postérieure / Fessiers & Ischios
   | 'LEGS_CALVES' // Mollets
   // CARDIO
-  | 'CARDIO_INCLINE';
+  | 'CARDIO_INCLINE'
+  // CUSTOM
+  | 'CUSTOM_EXO';
 
 export interface ExerciseDefinition {
   id: string;

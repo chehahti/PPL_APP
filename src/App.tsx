@@ -8,6 +8,7 @@ import { Dumbbell, Timer, Flame, Sparkles, Smartphone, Download } from 'lucide-r
 import { AppSettings, CompletedWorkout, ExerciseDefinition } from './types/fitness';
 import { StorageService, DEFAULT_SETTINGS } from './services/storageService';
 import { audioService } from './services/audioService';
+import { notificationService } from './services/notificationService';
 import { Navbar } from './components/Navbar';
 import { WorkoutTab } from './components/WorkoutTab';
 import { ProgressionTab } from './components/ProgressionTab';
@@ -22,11 +23,12 @@ export default function App() {
   const [history, setHistory] = useState<CompletedWorkout[]>([]);
   const [resetCount, setResetCount] = useState<number>(0);
 
-  // Rest Timer State
+  // Rest Timer State (Timestamp-based to continue perfectly in background)
   const [timerSecondsLeft, setTimerSecondsLeft] = useState<number>(0);
   const [timerTotalDuration, setTimerTotalDuration] = useState<number>(90);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState<boolean>(false);
+  const timerEndTimeRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
 
   // PWA Add to Home Screen State
@@ -54,6 +56,28 @@ export default function App() {
     };
     checkStandalone();
 
+    // Check existing timer in localStorage
+    try {
+      const savedEndTime = localStorage.getItem('ppl_timer_end_time');
+      const savedTotal = localStorage.getItem('ppl_timer_total');
+      if (savedEndTime && savedTotal) {
+        const endTime = parseInt(savedEndTime, 10);
+        const total = parseInt(savedTotal, 10);
+        const now = Date.now();
+        if (endTime > now) {
+          const remaining = Math.ceil((endTime - now) / 1000);
+          timerEndTimeRef.current = endTime;
+          setTimerTotalDuration(total);
+          setTimerSecondsLeft(remaining);
+          setIsTimerRunning(true);
+        } else {
+          localStorage.removeItem('ppl_timer_end_time');
+        }
+      }
+    } catch {
+      //
+    }
+
     // Capture PWA beforeinstallprompt event for Android / Chrome
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -61,26 +85,51 @@ export default function App() {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Global click listener to unlock Web Audio API on first interaction
+    const unlockAudioContext = () => {
+      audioService.unlock();
+      window.removeEventListener('click', unlockAudioContext);
+      window.removeEventListener('touchstart', unlockAudioContext);
+    };
+    window.addEventListener('click', unlockAudioContext);
+    window.addEventListener('touchstart', unlockAudioContext);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('click', unlockAudioContext);
+      window.removeEventListener('touchstart', unlockAudioContext);
     };
   }, []);
 
-  // Timer Tick Interval
+  // Timer Tick Interval with Timestamp Accuracy (handles background / lock screen)
   useEffect(() => {
-    if (isTimerRunning && timerSecondsLeft > 0) {
-      timerIntervalRef.current = window.setInterval(() => {
-        setTimerSecondsLeft((prev) => {
-          if (prev <= 1) {
-            // Timer Finished!
-            setIsTimerRunning(false);
-            if (settings.soundEnabled) audioService.playFinishChime();
-            if (settings.vibrationEnabled) audioService.vibrate([300, 150, 300]);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    const handleTimerTick = () => {
+      if (!timerEndTimeRef.current) return;
+      const now = Date.now();
+      const diffMs = timerEndTimeRef.current - now;
+      const remainingSecs = Math.max(0, Math.ceil(diffMs / 1000));
+
+      if (remainingSecs <= 0) {
+        // Timer Finished!
+        setIsTimerRunning(false);
+        setTimerSecondsLeft(0);
+        timerEndTimeRef.current = null;
+        try {
+          localStorage.removeItem('ppl_timer_end_time');
+        } catch {}
+
+        if (settings.soundEnabled) audioService.playFinishChime();
+        if (settings.vibrationEnabled) audioService.vibrate([400, 200, 400, 200, 600]);
+        notificationService.sendTimerCompletedNotification();
+      } else {
+        setTimerSecondsLeft(remainingSecs);
+      }
+    };
+
+    if (isTimerRunning && timerEndTimeRef.current) {
+      // Run frequent tick to ensure smooth UI and immediate sync
+      timerIntervalRef.current = window.setInterval(handleTimerTick, 250);
     } else {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -88,13 +137,35 @@ export default function App() {
       }
     }
 
+    // Immediate check when coming back from background
+    const handleVisibilityOrFocusChange = () => {
+      if (document.visibilityState === 'visible' && isTimerRunning && timerEndTimeRef.current) {
+        handleTimerTick();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocusChange);
+    window.addEventListener('focus', handleVisibilityOrFocusChange);
+
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocusChange);
+      window.removeEventListener('focus', handleVisibilityOrFocusChange);
     };
-  }, [isTimerRunning, timerSecondsLeft, settings.soundEnabled, settings.vibrationEnabled]);
+  }, [isTimerRunning, settings.soundEnabled, settings.vibrationEnabled]);
 
   // Timer Control Handlers
   const handleStartTimer = (durationSeconds = 90) => {
+    audioService.unlock();
+    notificationService.requestPermission().catch(() => {});
+
+    const endTime = Date.now() + durationSeconds * 1000;
+    timerEndTimeRef.current = endTime;
+    try {
+      localStorage.setItem('ppl_timer_end_time', endTime.toString());
+      localStorage.setItem('ppl_timer_total', durationSeconds.toString());
+    } catch {}
+
     setTimerTotalDuration(durationSeconds);
     setTimerSecondsLeft(durationSeconds);
     setIsTimerRunning(true);
@@ -103,25 +174,50 @@ export default function App() {
   };
 
   const handlePauseTimer = () => {
+    timerEndTimeRef.current = null;
+    try {
+      localStorage.removeItem('ppl_timer_end_time');
+    } catch {}
     setIsTimerRunning(false);
   };
 
   const handleResumeTimer = () => {
-    if (timerSecondsLeft > 0) {
-      setIsTimerRunning(true);
-    } else {
-      handleStartTimer(timerTotalDuration || 90);
-    }
+    audioService.unlock();
+    const remaining = timerSecondsLeft > 0 ? timerSecondsLeft : (timerTotalDuration || 90);
+    const endTime = Date.now() + remaining * 1000;
+    timerEndTimeRef.current = endTime;
+    try {
+      localStorage.setItem('ppl_timer_end_time', endTime.toString());
+      localStorage.setItem('ppl_timer_total', (timerTotalDuration || 90).toString());
+    } catch {}
+
+    setTimerSecondsLeft(remaining);
+    setIsTimerRunning(true);
   };
 
   const handleResetTimer = () => {
+    timerEndTimeRef.current = null;
+    try {
+      localStorage.removeItem('ppl_timer_end_time');
+    } catch {}
     setIsTimerRunning(false);
     setTimerSecondsLeft(timerTotalDuration);
   };
 
   const handleAdjustTimer = (delta: number) => {
-    setTimerSecondsLeft((prev) => Math.max(0, prev + delta));
-    setTimerTotalDuration((prev) => Math.max(0, prev + delta));
+    const newRemaining = Math.max(0, timerSecondsLeft + delta);
+    const newTotal = Math.max(0, timerTotalDuration + delta);
+    setTimerSecondsLeft(newRemaining);
+    setTimerTotalDuration(newTotal);
+
+    if (isTimerRunning) {
+      const endTime = Date.now() + newRemaining * 1000;
+      timerEndTimeRef.current = endTime;
+      try {
+        localStorage.setItem('ppl_timer_end_time', endTime.toString());
+        localStorage.setItem('ppl_timer_total', newTotal.toString());
+      } catch {}
+    }
   };
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
@@ -135,6 +231,11 @@ export default function App() {
     setResetCount((prev) => prev + 1);
     setIsTimerRunning(false);
     setTimerSecondsLeft(0);
+    timerEndTimeRef.current = null;
+    try {
+      localStorage.removeItem('ppl_timer_end_time');
+      localStorage.removeItem('ppl_timer_total');
+    } catch {}
   };
 
   const formatTimerShort = (seconds: number) => {
@@ -144,30 +245,23 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#F5F5F5] antialiased font-sans selection:bg-[#A3FF12] selection:text-black flex flex-col">
-      {/* Bento Grid Header */}
+    <div className="min-h-screen bg-[#09090D] text-zinc-100 antialiased font-sans selection:bg-[#D4FF00] selection:text-black flex flex-col">
+      {/* Modern Trending Athletic Header */}
       <header
         id="app-top-header"
-        className="sticky top-0 z-30 bg-[#0A0A0A]/90 backdrop-blur-xl border-b border-[#262626] px-4 py-3"
+        className="sticky top-0 z-30 bg-[#09090D]/90 backdrop-blur-2xl border-b border-white/[0.08] px-4 py-3 shadow-2xl"
       >
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#1A1A1A] border border-[#262626] flex items-center justify-center shadow-lg relative overflow-hidden group">
-              <div className="absolute inset-0 bg-[#A3FF12]/10 rounded-2xl"></div>
-              <Dumbbell className="w-5 h-5 text-[#A3FF12] relative z-10" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-950 border border-white/15 flex items-center justify-center shadow-inner relative overflow-hidden group">
+              <div className="absolute inset-0 bg-[#D4FF00]/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Dumbbell className="w-4 h-4 text-[#D4FF00]" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-extrabold tracking-tight text-[#F5F5F5]">
-                  PPL FITNESS
-                </h1>
-                <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full bg-[#A3FF12]/15 text-[#A3FF12] border border-[#A3FF12]/30 uppercase tracking-wider">
-                  Bento
-                </span>
-              </div>
-              <p className="text-[10px] text-zinc-400 font-medium tracking-wide uppercase mt-0.5">
-                Push • Pull • Legs • Pyramidal
-              </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xl font-black tracking-wider text-white font-display">
+                PPL
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#D4FF00] shadow-[0_0_8px_#D4FF00] animate-pulse" />
             </div>
           </div>
 
@@ -177,11 +271,11 @@ export default function App() {
               <button
                 id="btn-header-install"
                 onClick={() => setIsInstallModalOpen(true)}
-                title="Ajouter à l'écran d'accueil"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold bg-[#1A1A1A] hover:bg-[#242424] text-[#A3FF12] border border-[#262626] hover:border-[#A3FF12]/40 transition-all shadow-sm"
+                title="Installer l'application sur le téléphone"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 hover:border-white/20 transition-all shadow-xs active:scale-95"
               >
-                <Smartphone className="w-4 h-4 text-[#A3FF12]" />
-                <span className="hidden xs:inline sm:inline text-[11px] font-bold">App</span>
+                <Smartphone className="w-3.5 h-3.5 text-[#D4FF00]" />
+                <span className="hidden xs:inline sm:inline text-[11px] font-bold tracking-wider uppercase">App</span>
               </button>
             )}
 
@@ -195,14 +289,14 @@ export default function App() {
                   handleStartTimer(settings.defaultRestDuration);
                 }
               }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
                 isTimerRunning
-                  ? 'bg-[#A3FF12] text-black border-[#A3FF12] shadow-lg shadow-[#A3FF12]/20 animate-pulse'
-                  : 'bg-[#1A1A1A] text-zinc-300 border-[#262626] hover:border-zinc-700 hover:text-white'
+                  ? 'bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-[0_0_20px_rgba(212,255,0,0.35)] animate-pulse'
+                  : 'bg-zinc-900/90 text-zinc-300 border-white/10 hover:border-white/20 hover:text-white'
               }`}
             >
-              <Timer className={`w-4 h-4 ${isTimerRunning ? 'text-black' : 'text-[#A3FF12]'}`} />
-              <span className="font-mono">
+              <Timer className={`w-3.5 h-3.5 ${isTimerRunning ? 'text-black fill-current' : 'text-[#D4FF00]'}`} />
+              <span className="font-mono text-xs font-bold">
                 {isTimerRunning ? formatTimerShort(timerSecondsLeft) : 'Chrono'}
               </span>
             </button>
