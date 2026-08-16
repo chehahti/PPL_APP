@@ -356,28 +356,20 @@ export const WorkoutTab: React.FC<WorkoutTabProps> = ({
 
   return (
     <div id="workout-tab-container" className="pb-28 pt-2 space-y-4">
-      {/* Top Session Header & Live Chronometer */}
-      <div className="flex justify-between items-center px-1 pt-1">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse" />
-            <span className="text-zinc-400 text-[10px] font-black tracking-widest uppercase font-mono">
-              Séance en cours
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-display mt-0.5">
-            {currentCategory}
-          </h1>
-          <p className="text-xs text-zinc-400 font-medium mt-0.5">
-            {categorySubtitles[currentCategory]}
-          </p>
+      {/* Top Session Header */}
+      <div className="px-1 pt-1">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse" />
+          <span className="text-zinc-400 text-[10px] font-black tracking-widest uppercase font-mono">
+            Séance en cours
+          </span>
         </div>
-
-        {/* Live Session Timer Pill */}
-        <div className="flex items-center gap-2 bg-zinc-900/90 border border-white/10 px-4 py-2 rounded-2xl shadow-inner">
-          <Clock className="w-4 h-4 text-[#D4FF00] animate-spin" style={{ animationDuration: '8s' }} />
-          <span className="font-mono text-sm font-bold text-white tracking-wider">{formatElapsed(elapsedSeconds)}</span>
-        </div>
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-display mt-0.5">
+          {currentCategory}
+        </h1>
+        <p className="text-xs text-zinc-400 font-medium mt-0.5">
+          {categorySubtitles[currentCategory]}
+        </p>
       </div>
 
       {/* Modern High-End PPL Category Switcher */}
